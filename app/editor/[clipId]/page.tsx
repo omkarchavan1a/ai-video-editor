@@ -1,12 +1,12 @@
 "use client";
-import { useMemo, useRef, useState, use } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForge } from "@/lib/store";
 import { applyPatch, CAPTION_PRESETS, fmtTime, toSRT, type EDL } from "@/lib/edl";
 import { exportClip } from "@/lib/exporter";
 
-export default function EditorPage({ params }: { params: Promise<{ clipId: string }> }) {
-  const { clipId: projectId } = use(params);
+export default function EditorPage({ params }: { params: { clipId: string } }) {
+  const { clipId: projectId } = params;
   const q = useSearchParams();
   const clipId = q.get("clip") || "";
   const proj = useForge((s) => s.projects[projectId]);

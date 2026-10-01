@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForge, videoBlobRegistry } from "@/lib/store";
 import { heuristicClips, fmtTime, type ClipCandidate, type Word } from "@/lib/edl";
@@ -8,13 +8,12 @@ import { detectSilences } from "@/lib/silence";
 import { grabFrames, analyzeFrames, type VisualCue } from "@/lib/vision-client";
 import { transcribeViaServer, transcribeOnDevice, extractAudioTrack } from "@/lib/transcribe-client";
 import { exportClip } from "@/lib/exporter";
-import { sampleWords } from "@/lib/sample";
 import { COST, creditsError } from "@/lib/limits";
 
 type DoneClip = ClipCandidate & { notes: string[] };
 
-export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ProjectPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const proj = useForge((s) => s.projects[id]);
   const [prefs, setPrefs] = useState({ count: 8, topic: "", tone: "punchy" });
