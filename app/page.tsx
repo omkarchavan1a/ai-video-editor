@@ -3,16 +3,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForge, videoBlobRegistry } from "@/lib/store";
 import { sampleWords, SAMPLE_VIDEO } from "@/lib/sample";
+import { validateUpload, maxUploadFor, fmtBytes } from "@/lib/limits";
 
 export default function Dashboard() {
   const router = useRouter();
   const { projects, credits, plan } = useForge();
   const [busy, setBusy] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const list = Object.values(projects).sort((a, b) => b.id.localeCompare(a.id));
 
   async function newUpload(files: FileList | null) {
     const f = files?.[0];
     if (!f) return;
+    const check = validateUpload(f, useForge.getState().plan);
+    if (!check.ok) {
+      setUploadError(check.error || "Upload rejected.");
+      return;
+    }
+    setUploadError("");
     setBusy(true);
     const id = `prj_${Date.now()}`;
     const url = URL.createObjectURL(f);
@@ -51,6 +59,8 @@ export default function Dashboard() {
       </div>
 
       {busy && <p className="text-sm text-neutral-400">Preparing…</p>}
+      {uploadError && <p className="card border-red-800 text-sm text-red-300">⚠️ {uploadError}</p>}
+      <p className="text-xs text-neutral-500">Max upload on {plan} plan: {fmtBytes(maxUploadFor(plan))} · MP4, MOV, MKV, WebM, MP3, WAV</p>
 
       <div className="grid gap-3 md:grid-cols-3">
         {list.length === 0 && <div className="card text-sm text-neutral-400">No projects yet. Upload a video or try the sample — the full pipeline (captions, reframing, editor, export) works end-to-end on Vercel.</div>}

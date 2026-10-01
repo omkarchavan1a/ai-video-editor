@@ -9,6 +9,7 @@ import { grabFrames, analyzeFrames, type VisualCue } from "@/lib/vision-client";
 import { transcribeViaServer, transcribeOnDevice, extractAudioTrack } from "@/lib/transcribe-client";
 import { exportClip } from "@/lib/exporter";
 import { sampleWords } from "@/lib/sample";
+import { COST, creditsError } from "@/lib/limits";
 
 type DoneClip = ClipCandidate & { notes: string[] };
 
@@ -42,6 +43,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     const set = (patch: Partial<typeof p>) => st.setStatus(id, patch);
     setBusy(true);
     try {
+      const noCredits = creditsError(st.credits, COST.analyze);
+      if (noCredits) {
+        set({ status: "failed", progressNote: noCredits });
+        setBusy(false);
+        return;
+      }
       if (videoRef.current) {
         await new Promise((r) => { const v = videoRef.current!; if (v.readyState >= 1) return r(0); v.onloadedmetadata = () => r(0); setTimeout(() => r(0), 4000); });
         set({ duration: videoRef.current?.duration || 0 });
@@ -120,6 +127,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
   async function exportOne(c: DoneClip) {
     if (!proj) return;
+    const noCredits = creditsError(useForge.getState().credits, COST.export);
+    if (noCredits) {
+      alert(noCredits);
+      return;
+    }
     setExporting(c.id);
     try {
       const blob = await exportClip({ videoUrl: proj.videoUrl, edl: c.edl, onProgress: () => {}, watermark: useForge.getState().plan === "free" });

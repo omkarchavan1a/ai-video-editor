@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import { llmConfig } from "@/lib/llm";
+import { checkRate, limitedResponse, BUDGETS, WINDOW_MS } from "@/lib/rate-limit";
+import { MAX_VISION_FRAMES, MAX_FRAME_BYTES } from "@/lib/limits";
 
 export const maxDuration = 60;
 
 // POST /api/llm/vision — frames → per-frame energy/moment notes.
 // Uses Nvidia vision model; heuristic fallback (even spacing) when no key.
 export async function POST(req: Request) {
+  const rl = checkRate(req, "llm:vision", BUDGETS.vision, WINDOW_MS);
+  if (!rl.ok) return limitedResponse(rl.retryAfter);
   try {
     const { frames } = (await req.json()) as { frames: { t: number; jpg: string }[] };
     if (!frames?.length) return NextResponse.json({ cues: [] });
+    if (frames.length > MAX_VISION_FRAMES) return NextResponse.json({ error: `Max ${MAX_VISION_FRAMES} frames per request.` }, { status: 413 });
+    if (frames.some((f) => (f.jpg || "").length > MAX_FRAME_BYTES)) {
+      return NextResponse.json({ error: "Frame image too large. Use smaller frames." }, { status: 413 });
+    }
     const { apiKey, baseUrl } = llmConfig();
     const model = process.env.LLM_VISION_MODEL || "meta/llama-3.2-11b-vision-instruct";
     if (!apiKey || apiKey.startsWith("mstrl_")) {

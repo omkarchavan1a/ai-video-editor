@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { chatComplete, safeJsonParse } from "@/lib/llm";
 import type { EDL } from "@/lib/edl";
+import { checkRate, limitedResponse, BUDGETS, WINDOW_MS } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
 
 // POST /api/llm/command — "make captions yellow" → EDL patch (FR-ED-10)
 export async function POST(req: Request) {
+  const rl = checkRate(req, "llm:command", BUDGETS.command, WINDOW_MS);
+  if (!rl.ok) return limitedResponse(rl.retryAfter);
   try {
     const { edl, command } = (await req.json()) as { edl: EDL; command: string };
     if (!edl || !command) return NextResponse.json({ error: "edl + command required" }, { status: 400 });
+    if (command.length > 500) return NextResponse.json({ error: "Command too long (max 500 chars)." }, { status: 413 });
     const raw = await chatComplete([
       { role: "system", content: "You edit video EDLs. Return JSON patch only. No markdown." },
       { role: "user", content: `Current EDL: ${JSON.stringify(edl).slice(0, 6000)}\nCommand: "${command}"\nReturn JSON patch with any of: trim_start (sec), trim_end (sec), aspect ("9:16"|"1:1"|"4:5"|"16:9"), captions {style}, overlays [{type:"text",text,s,e}], audio {music_id,ducking}. Example: {"trim_start":5,"captions":{"style":"neon"}}` },

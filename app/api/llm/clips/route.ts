@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { chatComplete, safeJsonParse } from "@/lib/llm";
 import { heuristicClips, buildEDL, type Word } from "@/lib/edl";
+import { checkRate, limitedResponse, BUDGETS, WINDOW_MS } from "@/lib/rate-limit";
+import { MAX_TRANSCRIPT_CHARS } from "@/lib/limits";
 
 export const maxDuration = 60;
 
@@ -13,14 +15,20 @@ type Body = {
 
 // POST /api/llm/clips — transcript → ranked clip candidates (FR-CL-01..04)
 export async function POST(req: Request) {
+  const rl = checkRate(req, "llm:clips", BUDGETS.clips, WINDOW_MS);
+  if (!rl.ok) return limitedResponse(rl.retryAfter);
   try {
     const body = (await req.json()) as Body;
     const words = body.words || [];
     if (!words.length) return NextResponse.json({ error: "empty transcript" }, { status: 400 });
+    if (words.length > 20000) return NextResponse.json({ error: "Transcript too large (max 20k words)." }, { status: 413 });
     const prefs = body.prefs || {};
     const visualCues = body.visualCues || [];
     const sourceId = body.sourceId || "src_01";
     const transcript = words.map((w) => w.w).join(" ");
+    if (transcript.length > MAX_TRANSCRIPT_CHARS) {
+      return NextResponse.json({ error: "Transcript too large for analysis." }, { status: 413 });
+    }
     const total = words[words.length - 1]?.e || 0;
     const visualLine = visualCues.length
       ? `Visual analysis (timestamps in seconds, energy 0-1): ${visualCues.map((v) => `${v.t.toFixed(0)}s energy=${v.energy} "${v.note.slice(0, 80)}"`).join("; ").slice(0, 2000)} Prefer clips overlapping high-energy visual moments.`

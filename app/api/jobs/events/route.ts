@@ -1,7 +1,10 @@
 import { useForge } from "@/lib/store";
+import { checkRate, limitedResponse, BUDGETS, WINDOW_MS } from "@/lib/rate-limit";
 
 // GET /api/jobs/events?projectId= — SSE progress stream (FR-JOB-01, FR-ING-05)
 export async function GET(req: Request) {
+  const rl = checkRate(req, "jobs:events", BUDGETS.events, WINDOW_MS);
+  if (!rl.ok) return limitedResponse(rl.retryAfter);
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId") || "unknown";
   const enc = new TextEncoder();

@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import type { Word } from "@/lib/edl";
+import { checkRate, limitedResponse, BUDGETS, WINDOW_MS } from "@/lib/rate-limit";
+import { MAX_AUDIO_BYTES, fmtBytes } from "@/lib/limits";
 
 export const maxDuration = 60;
 
 // POST /api/transcribe — proxies to OpenAI/Groq Whisper if keys exist.
 // No key on Vercel MVP → 501, client falls back to on-device whisper-tiny.
 export async function POST(req: Request) {
+  const rl = checkRate(req, "transcribe", BUDGETS.transcribe, WINDOW_MS);
+  if (!rl.ok) return limitedResponse(rl.retryAfter);
+  const len = Number(req.headers.get("content-length") || 0);
+  if (len > MAX_AUDIO_BYTES) {
+    return NextResponse.json({ error: `Audio too large (max ${fmtBytes(MAX_AUDIO_BYTES)} per request).` }, { status: 413 });
+  }
   const openai = process.env.OPENAI_API_KEY;
   const groq = process.env.GROQ_API_KEY;
   if (!openai && !groq) {
